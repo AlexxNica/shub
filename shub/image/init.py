@@ -6,7 +6,9 @@ import click
 
 from shub import exceptions as shub_exceptions
 from shub import utils as shub_utils
+from shub.deploy import _create_default_setup_py
 from shub.image import utils
+from shub.utils import closest_file
 
 
 DOCKER_APP_DIR = '/app'
@@ -95,6 +97,12 @@ def cli(project, base_image, base_deps, add_deps, requirements):
     if os.path.exists(dockefile_path):
         raise shub_exceptions.ShubException('Found a Dockerfile in the project directory, aborting')
     settings_module = scrapy_config.get('settings', project)
+    with utils.remember_cwd():
+        closest = closest_file('scrapy.cfg')
+        os.chdir(os.path.dirname(closest))
+        if not os.path.exists('setup.py'):
+            _create_default_setup_py(settings=settings_module)
+
     values = {
         'base_image':   base_image,
         'system_deps':  _format_system_deps(base_deps, add_deps),
