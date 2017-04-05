@@ -31,10 +31,13 @@ You can learn about Docker at https://www.docker.com/.
 """
 
 
-def debug_log(msg):
+def is_verbose():
     ctx = click.get_current_context(True)
-    # FIXME remove check of debug param as it's deprecated
-    if ctx and (ctx.params.get('verbose') or ctx.params.get('debug')):
+    return ctx and ctx.params.get('verbose')
+
+
+def debug_log(msg):
+    if is_verbose():
         click.echo(msg)
 
 
