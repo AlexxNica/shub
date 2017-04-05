@@ -27,6 +27,8 @@ provided, the tool uses VCS-based stamp over project directory (the same as
 shub utils itself).
 """
 
+STEP_REGEX = re.compile(r'Step (\d+)/(\d+) :*')
+
 
 @click.command(help=HELP, short_help=SHORT_HELP)
 @click.argument("target", required=False, default="default")
@@ -53,9 +55,13 @@ def build_cmd(target, version, skip_tests):
     if not os.path.exists(os.path.join(project_dir, 'Dockerfile')):
         raise shub_exceptions.BadParameterException(
             "Dockerfile is not found, please use shub image 'init' command")
-    is_built = False
+    ctx = click.get_current_context(True)
+    verbose = ctx and ctx.params.get('verbose')
+    bar, is_built = None, False
     for data in client.build(path=project_dir, tag=image_name, decode=True):
         if 'stream' in data:
+            if not verbose:
+                bar = _create_or_update_progressbar(bar, data, verbose)
             utils.debug_log("{}".format(data['stream'][:-1]))
             is_built = re.search(
                 r'Successfully built ([0-9a-f]+)', data['stream'])
@@ -69,6 +75,26 @@ def build_cmd(target, version, skip_tests):
     # Test the image content after building it
     if not skip_tests:
         test_cmd(target, version)
+
+
+def _create_or_update_progressbar(bar, event, verbose):
+    """Helper to create progress bar to track progress."""
+    step_row = STEP_REGEX.match(event['stream'])
+    if step_row:
+        _, total = step_row.groups()
+        if not bar:
+            bar = click.progressbar(
+                label='layers',
+                length=int(total),
+                # show amount of layers instead of percents
+                show_pos=True,
+                # terminal width
+                width=0,
+                # fill with full block char to match with tqdm
+                fill_char=u'\u2588',
+            )
+        next(bar)
+    return bar
 
 
 def _create_setup_py_if_not_exists():
