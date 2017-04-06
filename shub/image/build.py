@@ -1,8 +1,10 @@
 import os
 import re
+import sys
 import warnings
 
 import click
+from tqdm import tqdm
 
 from shub import exceptions as shub_exceptions
 from shub.config import load_shub_config
@@ -60,13 +62,22 @@ def build_cmd(target, version, skip_tests):
     for data in client.build(path=project_dir, tag=image_name, decode=True):
         if 'stream' in data:
             if not verbose:
-                bar = _create_or_update_progressbar(bar, data, verbose)
+                step_row = STEP_REGEX.match(data['stream'])
+                if step_row:
+                    step_id, total = [int(val) for val in step_row.groups()]
+                    if not bar:
+                        bar = _create_progress_bar(total)
+                    # ignore onbuild sub-steps
+                    if step_id > bar.pos and bar.total == total:
+                        bar.update()
             utils.debug_log("{}".format(data['stream'][:-1]))
             is_built = re.search(
                 r'Successfully built ([0-9a-f]+)', data['stream'])
         elif 'error' in data:
-            click.echo("Error {}:\n{}".format(
+            tqdm.write("Error {}:\n{}".format(
                 data['error'], data['errorDetail']))
+    if bar:
+        bar.close()
     if not is_built:
         raise shub_exceptions.RemoteErrorException(
             "Build image operation failed")
@@ -76,24 +87,20 @@ def build_cmd(target, version, skip_tests):
         test_cmd(target, version)
 
 
-def _create_or_update_progressbar(bar, event, verbose):
-    """Helper to create progress bar to track progress."""
-    step_row = STEP_REGEX.match(event['stream'])
-    if step_row:
-        _, total = step_row.groups()
-        if not bar:
-            bar = click.progressbar(
-                label='layers',
-                length=int(total),
-                # show amount of layers instead of percents
-                show_pos=True,
-                # terminal width
-                width=0,
-                # fill with full block char to match with tqdm
-                fill_char=u'\u2588',
-            )
-        next(bar)
-    return bar
+def _create_progress_bar(total):
+    return tqdm(
+        total=total,
+        desc='layers',
+        # XXX: click.get_text_stream or click.get_binary_stream don't
+        # work well with tqdm on Windows and Python 3
+        file=sys.stdout,
+        # helps to update bars on resizing terminal
+        dynamic_ncols=True,
+        # miniters improves progress on erratic updates caused by network
+        miniters=1,
+        # don't need rate here, let's simplify the bar
+        bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}',
+    )
 
 
 def _create_setup_py_if_not_exists():
