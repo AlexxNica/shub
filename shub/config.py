@@ -267,10 +267,25 @@ class ShubConfig(object):
             apikey=apikey,
             stack=(self.stacks.get(proj['stack'], proj['stack'])
                    if 'stack' in proj else self.stacks.get('default')),
+            image=self._get_image_for_target(proj, target),
             requirements_file=self.requirements_file,
             version=self.get_version(),
             eggs=self.eggs,
         )
+
+    def _get_image_for_target(self, project, target):
+        if 'image' in project and project['image'] is not None:
+            image = project['image']
+        else:
+            if target != 'default' and target in self.images:
+                warnings.warn("")
+            image = self.images.get(target, self.images.get('default'))
+
+        # simple validation
+        if image is True or image == 'scrapinghub':
+            # FIXME move into const variable to the top of module
+            image = 'images.scrapinghub.com/project/{}'.format(project['id'])
+        return image
 
     def get_target(self, target, auth_required=True):
         """Return (project_id, endpoint, apikey) for given target."""
@@ -297,11 +312,12 @@ class ShubConfig(object):
             raise NotFoundException("Could not find image for %s. Please "
                                     "define it in your scrapinghub.yml."
                                     "" % target)
-        return self.images[target]
+        return self.get_target_conf(target, auth_required=False).image
 
 
 Target = namedtuple('Target', ['project_id', 'endpoint', 'apikey', 'stack',
-                               'requirements_file', 'version', 'eggs'])
+                               'image', 'requirements_file', 'version',
+                               'eggs'])
 
 
 MIGRATION_BANNER = """
