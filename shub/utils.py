@@ -21,6 +21,7 @@ from six.moves.urllib.parse import urljoin
 import click
 import pip
 import requests
+import yaml
 
 try:
     from scrapinghub import HubstorageClient
@@ -568,3 +569,34 @@ def download_from_pypi(dest, pkg=None, reqfile=None, extra_args=None):
     with patch_sys_executable():
         pip.main([cmd, '-d', dest, '--no-deps'] + no_wheel + extra_args +
                  target)
+
+
+@contextlib.contextmanager
+def update_yaml_dict(conf_path=None):
+    """
+    Context manager for updating a YAML file. Key ordering and comments are not
+    preserved.
+    """
+    if not conf_path:
+        click.secho("Using update_yaml_dict without path is deprecated. Import"
+                    " GLOBAL_SCRAPINGHUB_YML_PATH from shub.config",
+                    fg='yellow')
+        from shub.config import GLOBAL_SCRAPINGHUB_YML_PATH
+        conf_path = GLOBAL_SCRAPINGHUB_YML_PATH
+    try:
+        with open(conf_path, 'r') as f:
+            conf = yaml.safe_load(f) or {}
+    except IOError as e:
+        if e.errno != 2:
+            raise
+        conf = {}
+    # Code inside context manager is executed after this yield
+    yield conf
+    # Avoid writing "key: {}"
+    for key in list(conf.keys()):
+        if conf[key] == {}:
+            del conf[key]
+    with open(conf_path, 'w') as f:
+        # Avoid writing "{}"
+        if conf:
+            yaml.dump(conf, f, default_flow_style=False)

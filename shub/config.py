@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-import contextlib
 import netrc
 import os
 import warnings
@@ -13,7 +12,8 @@ from shub.exceptions import (BadParameterException, BadConfigException,
                              ConfigParseException, MissingAuthException,
                              NotFoundException)
 from shub.utils import (closest_file, get_scrapycfg_targets, get_sources,
-                        pwd_hg_version, pwd_git_version, pwd_version)
+                        pwd_hg_version, pwd_git_version, pwd_version,
+                        update_yaml_dict)
 
 
 GLOBAL_SCRAPINGHUB_YML_PATH = os.path.expanduser("~/.scrapinghub.yml")
@@ -411,32 +411,6 @@ def load_shub_config(load_global=True, load_local=True, load_env=True):
         else:
             _migrate_and_load_scrapy_cfg(conf)
     return conf
-
-
-@contextlib.contextmanager
-def update_yaml_dict(conf_path=None):
-    """
-    Context manager for updating a YAML file. Key ordering and comments are not
-    preserved.
-    """
-    conf_path = conf_path or GLOBAL_SCRAPINGHUB_YML_PATH
-    try:
-        with open(conf_path, 'r') as f:
-            conf = yaml.safe_load(f) or {}
-    except IOError as e:
-        if e.errno != 2:
-            raise
-        conf = {}
-    # Code inside context manager is executed after this yield
-    yield conf
-    # Avoid writing "key: {}"
-    for key in list(conf.keys()):
-        if conf[key] == {}:
-            del conf[key]
-    with open(conf_path, 'w') as f:
-        # Avoid writing "{}"
-        if conf:
-            yaml.dump(conf, f, default_flow_style=False)
 
 
 def get_target(target, auth_required=True):
