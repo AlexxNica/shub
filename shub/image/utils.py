@@ -33,7 +33,7 @@ You can learn about Docker at https://www.docker.com/.
 
 def is_verbose():
     ctx = click.get_current_context(True)
-    return ctx and ctx.params.get('verbose')
+    return ctx and (ctx.params.get('verbose') or ctx.params.get('debug'))
 
 
 def debug_log(msg):
@@ -46,6 +46,7 @@ def deprecate_debug_parameter(ctx, param, value):
         click.echo("WARNING: -d/--debug parameter is deprecated. "
                    "Please use -v/--verbose parameter instead.",
                    err=True)
+        return value
 
 
 @contextlib.contextmanager
