@@ -29,7 +29,7 @@ provided, the tool uses VCS-based stamp over project directory (the same as
 shub utils itself).
 """
 
-STEP_REGEX = re.compile(r'Step (\d+)/(\d+) :*')
+BUILD_STEP_REGEX = re.compile(r'Step (\d+)/(\d+) :*')
 
 
 @click.command(help=HELP, short_help=SHORT_HELP)
@@ -62,14 +62,7 @@ def build_cmd(target, version, skip_tests):
     for data in client.build(path=project_dir, tag=image_name, decode=True):
         if 'stream' in data:
             if not verbose:
-                step_row = STEP_REGEX.match(data['stream'])
-                if step_row:
-                    step_id, total = [int(val) for val in step_row.groups()]
-                    if not bar:
-                        bar = _create_progress_bar(total)
-                    # ignore onbuild sub-steps
-                    if step_id > bar.pos and bar.total == total:
-                        bar.update()
+                bar = _create_or_update_progress_bar(bar, data, verbose)
             utils.debug_log("{}".format(data['stream'][:-1]))
             is_built = re.search(
                 r'Successfully built ([0-9a-f]+)', data['stream'])
@@ -85,6 +78,19 @@ def build_cmd(target, version, skip_tests):
     # Test the image content after building it
     if not skip_tests:
         test_cmd(target, version)
+
+
+def _create_or_update_progress_bar(bar, event, verbose):
+    """Helper to handle build steps and track progress."""
+    step_row = BUILD_STEP_REGEX.match(event['stream'])
+    if step_row:
+        step_id, total = [int(val) for val in step_row.groups()]
+        if not bar:
+            bar = _create_progress_bar(total)
+        # ignore onbuild sub-steps
+        if step_id > bar.pos and bar.total == total:
+            bar.update()
+    return bar
 
 
 def _create_progress_bar(total):
