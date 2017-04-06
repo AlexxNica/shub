@@ -101,6 +101,8 @@ def cli(project, base_image, base_deps, add_deps, requirements):
         closest = closest_file('scrapy.cfg')
         os.chdir(os.path.dirname(closest))
         if not os.path.exists('setup.py'):
+            click.echo("Created setup.py for settings in {}"
+                       .format(settings_module))
             _create_default_setup_py(settings=settings_module)
 
     values = {
