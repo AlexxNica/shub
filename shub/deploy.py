@@ -18,14 +18,11 @@ else:
     _2 = setuptools.msvc  # NOQA
 
 
-from scrapinghub import Connection, APIError
-
 from shub.config import load_shub_config
-from shub.exceptions import (InvalidAuthException, NotFoundException,
-                             RemoteErrorException, ShubException)
-from shub.utils import (closest_file, get_config, inside_project,
-                        make_deploy_request, run_python,
-                        update_yaml_dict)
+from shub.exceptions import NotFoundException, ShubException
+from shub.utils import (closest_file, create_scrapinghub_yml_wizard,
+                        get_config, inside_project, make_deploy_request,
+                        run_python)
 
 
 HELP = """
@@ -105,7 +102,7 @@ def cli(target, version, debug, egg, build_egg, verbose, keep_log):
         else:
             conf = load_shub_config()
             if target == 'default' and target not in conf.projects:
-                _deploy_wizard(conf)
+                create_scrapinghub_yml_wizard(conf)
             targetconf = conf.get_target_conf(target)
             version = version or targetconf.version
             auth = (targetconf.apikey, '')
@@ -181,56 +178,3 @@ def _build_egg():
 def _create_default_setup_py(**kwargs):
     with open('setup.py', 'w') as f:
         f.write(_SETUP_PY_TEMPLATE % kwargs)
-
-
-def _has_project_access(project, endpoint, apikey):
-    conn = Connection(apikey, url=endpoint)
-    try:
-        return project in conn.project_ids()
-    except APIError as e:
-        if 'Authentication failed' in e.message:
-            raise InvalidAuthException
-        else:
-            raise RemoteErrorException(e.message)
-
-
-def _deploy_wizard(conf, target='default'):
-    """
-    Ask user for project ID, ensure they have access to that project, and save
-    it to given ``target`` in local ``scrapinghub.yml`` if desired.
-    """
-    closest_scrapycfg = closest_file('scrapy.cfg')
-    # Double-checking to make deploy_wizard() independent of cli()
-    if not closest_scrapycfg:
-        raise NotFoundException("No Scrapy project found in this location.")
-    closest_sh_yml = os.path.join(os.path.dirname(closest_scrapycfg),
-                                  'scrapinghub.yml')
-    # Get default endpoint and API key (meanwhile making sure the user is
-    # logged in)
-    endpoint, apikey = conf.get_endpoint(0), conf.get_apikey(0)
-    project = click.prompt("Target project ID", type=int)
-    if not _has_project_access(project, endpoint, apikey):
-        raise InvalidAuthException(
-            "The account you logged in to has no access to project {}. Please "
-            "double-check the project ID and make sure you logged in to the "
-            "correct acount.".format(project),
-        )
-    conf.projects[target] = project
-    if click.confirm("Save as default", default=True):
-        try:
-            with update_yaml_dict(closest_sh_yml) as conf_yml:
-                default_entry = {'default': project}
-                if 'projects' in conf_yml:
-                    conf_yml['projects'].update(default_entry)
-                else:
-                    conf_yml['projects'] = default_entry
-        except Exception:
-            click.echo(
-                "There was an error while trying to write to scrapinghub.yml. "
-                "Could not save project {} as default.".format(project),
-            )
-        else:
-            click.echo(
-                "Project {} was set as default in scrapinghub.yml. You can "
-                "deploy to it via 'shub deploy' from now on.".format(project),
-            )

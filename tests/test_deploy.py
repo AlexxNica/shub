@@ -73,11 +73,12 @@ class DeployTest(AssertInvokeRaisesMixin, unittest.TestCase):
         self.assertEqual(auth, (self.conf.apikeys['vagrant'], ''))
 
     @patch('shub.deploy.make_deploy_request')
-    @patch('shub.deploy._has_project_access')
+    @patch('shub.utils.has_project_access')
     def test_deploy_wizard(self, mock_project_access, mock_deploy_req):
         with self.runner.isolated_filesystem():
             self._make_project()
-            with patch('shub.deploy._deploy_wizard') as mock_wizard:
+            with patch('shub.utils.create_scrapinghub_yml_wizard'
+                       ) as mock_wizard:
                 # Don't call when 'default' defined in the global conf
                 self.runner.invoke(deploy.cli)
                 self.assertFalse(mock_wizard.called)
